@@ -1,0 +1,99 @@
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: #9cc3e6;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: #f4f6f8;
+  user-select: none;
+}
+canvas { display: block; }
+
+#hud { position: fixed; inset: 0; pointer-events: none; }
+
+#topbar {
+  position: absolute; top: 12px; left: 16px;
+  font-size: 13px; opacity: 0.85;
+  background: rgba(10, 14, 20, 0.45); padding: 6px 10px; border-radius: 6px;
+}
+#topbar b { font-weight: 600; }
+
+#messages {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  width: min(640px, calc(100vw - 32px));
+}
+.msg {
+  background: rgba(12, 16, 22, 0.78); padding: 8px 14px; border-radius: 8px;
+  font-size: 16px; text-align: center; border-left: 4px solid #7fb2ff;
+  transition: opacity 0.4s;
+}
+.msg.warn { border-left-color: #ffb13b; }
+.msg.bad { border-left-color: #ff4b4b; }
+.msg.good { border-left-color: #4bd66e; }
+.msg.fade { opacity: 0; }
+
+#hint {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+  background: rgba(12, 16, 22, 0.72); padding: 8px 14px; border-radius: 8px;
+  font-size: 15px; max-width: calc(100vw - 32px); text-align: center;
+}
+#hint:empty { display: none; }
+#hint.warn { color: #ffcf7a; }
+
+#look {
+  position: absolute; left: 50%; bottom: 62px; transform: translateX(-50%);
+  font-size: 14px; background: rgba(12, 16, 22, 0.55); padding: 4px 10px; border-radius: 6px;
+}
+#look:empty { display: none; }
+
+#panel {
+  position: absolute; right: 16px; bottom: 16px;
+  background: rgba(12, 16, 22, 0.72); border-radius: 10px; padding: 10px 12px;
+  display: flex; gap: 14px; align-items: flex-end;
+}
+#readout { text-align: right; min-width: 92px; }
+#spd { font-size: 34px; font-weight: 700; line-height: 1; }
+#spdUnit { font-size: 13px; opacity: 0.7; }
+#gearRpm { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+#fps { font-size: 11px; opacity: 0.5; margin-top: 2px; }
+
+.pedals { display: flex; gap: 6px; }
+.pedal { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; opacity: 0.9; }
+.bar { position: relative; width: 14px; height: 70px; background: rgba(255,255,255,0.12); border-radius: 3px; overflow: hidden; }
+.bar .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; }
+#pc .fill { background: #7fb2ff; }
+#pb .fill { background: #ff5b5b; }
+#pt .fill { background: #4bd66e; }
+/* Точка схватывания сцепления */
+#pc .bite { position: absolute; left: 0; right: 0; height: 17%; bottom: 55%; background: rgba(255, 200, 80, 0.22); border-top: 1px solid rgba(255,200,80,0.6); border-bottom: 1px solid rgba(255,200,80,0.6); }
+
+#overlay {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(6, 10, 16, 0.72); padding: 16px; overflow: auto;
+}
+#overlay.hidden { display: none; }
+.card {
+  background: #141a22; border-radius: 14px; padding: 22px 26px; max-width: 760px; width: 100%;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5); max-height: calc(100vh - 32px); overflow: auto;
+}
+.card h1 { margin: 0 0 4px; font-size: 24px; }
+.card .sub { margin: 0 0 16px; opacity: 0.7; font-size: 14px; }
+.card h2 { font-size: 15px; margin: 16px 0 8px; opacity: 0.9; }
+.keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 20px; font-size: 14px; }
+.keys div { display: flex; gap: 10px; align-items: baseline; }
+kbd {
+  display: inline-block; min-width: 26px; text-align: center; padding: 1px 6px;
+  background: #2a3340; border: 1px solid #3d4858; border-bottom-width: 2px; border-radius: 5px;
+  font-family: inherit; font-size: 12px; white-space: nowrap;
+}
+.card ol { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6; }
+.start {
+  margin-top: 18px; text-align: center; font-size: 16px; padding: 10px;
+  background: #2b6fd6; border-radius: 8px; cursor: pointer; pointer-events: auto;
+}
+.start:hover { background: #3a7ee6; }
+
+@media (max-width: 640px) {
+  #panel { transform: scale(0.8); transform-origin: bottom right; }
+  .keys { grid-template-columns: 1fr; }
+}
