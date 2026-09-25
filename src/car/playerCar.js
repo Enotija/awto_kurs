@@ -151,9 +151,9 @@ export class PlayerCar {
       const fx = Math.sin(p.heading), fz = Math.cos(p.heading); // вперёд
       const rx = Math.cos(p.heading), rz = -Math.sin(p.heading); // вбок
       for (const c of colliders) {
-        const res = c.type === 'box'
-          ? obbVsBox(cx, cz, fx, fz, rx, rz, hw, hl, c)
-          : obbVsCircle(cx, cz, fx, fz, rx, rz, hw, hl, c);
+        const res = c.type === 'box' ? obbVsBox(cx, cz, fx, fz, rx, rz, hw, hl, c)
+          : c.type === 'poly' ? obbVsPoly(cx, cz, fx, fz, rx, rz, hw, hl, c)
+            : obbVsCircle(cx, cz, fx, fz, rx, rz, hw, hl, c);
         if (res && (!hit || res.depth > hit.depth)) hit = { ...res, kind: c.kind };
       }
       if (!hit) break;
@@ -189,6 +189,43 @@ function obbVsBox(cx, cz, fx, fz, rx, rz, hw, hl, b) {
       nx = ax * s; nz = az * s;
     }
   }
+  return { depth: best, nx, nz };
+}
+
+// Выпуклый многоугольник (квартал со скруглёнными углами) — теорема о разделяющей оси
+function obbVsPoly(cx, cz, fx, fz, rx, rz, hw, hl, c) {
+  const R = hl + hw;
+  if (cx + R < c.minX || cx - R > c.maxX || cz + R < c.minZ || cz - R > c.maxZ) return null;
+  if (!c.axes) {
+    c.axes = [];
+    c.cx = 0; c.cz = 0;
+    for (let i = 0; i < c.poly.length; i++) {
+      const a = c.poly[i], b = c.poly[(i + 1) % c.poly.length];
+      const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      c.axes.push([-(b[1] - a[1]) / l, (b[0] - a[0]) / l]);
+      c.cx += a[0] / c.poly.length; c.cz += a[1] / c.poly.length;
+    }
+  }
+  const corners = [
+    [cx + fx * hl + rx * hw, cz + fz * hl + rz * hw], [cx + fx * hl - rx * hw, cz + fz * hl - rz * hw],
+    [cx - fx * hl - rx * hw, cz - fz * hl - rz * hw], [cx - fx * hl + rx * hw, cz - fz * hl + rz * hw],
+  ];
+  let best = Infinity, nx = 0, nz = 0;
+  const test = (ax, az) => {
+    let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+    for (const [x, z] of corners) { const d = x * ax + z * az; if (d < a0) a0 = d; if (d > a1) a1 = d; }
+    for (const [x, z] of c.poly) { const d = x * ax + z * az; if (d < b0) b0 = d; if (d > b1) b1 = d; }
+    const overlap = Math.min(a1, b1) - Math.max(a0, b0);
+    if (overlap <= 0) return false;
+    if (overlap < best) {
+      best = overlap;
+      const s = (cx - c.cx) * ax + (cz - c.cz) * az >= 0 ? 1 : -1;
+      nx = ax * s; nz = az * s;
+    }
+    return true;
+  };
+  if (!test(fx, fz) || !test(rx, rz)) return null;
+  for (const [ax, az] of c.axes) if (!test(ax, az)) return null;
   return { depth: best, nx, nz };
 }
 

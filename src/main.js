@@ -5,6 +5,9 @@ import { PlayerCar } from './car/playerCar.js';
 import { Input } from './input/input.js';
 import { Hud } from './ui/hud.js';
 import { CarAudio } from './audio/carAudio.js';
+import { RulesEngine } from './rules/rules.js';
+import { Journal } from './ui/journal.js';
+import { createAutopilot, routeHelpers } from './debug/autopilot.js';
 
 // ---------- Рендер и сцена ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -38,7 +41,10 @@ const car = new PlayerCar(scene);
 car.reset(city.spawn);
 const input = new Input(window);
 const hud = new Hud();
+const journal = new Journal();
 const audio = new CarAudio();
+const rules = new RulesEngine(city.net, city.signals);
+rules.reset({ parked: city.spawn.parked });
 
 let paused = true;
 let started = false;
@@ -93,8 +99,12 @@ function handleAction(a, controls) {
       hud.message(audio.muted ? 'Звук выключен' : 'Звук включён');
       return;
     case 'night': setNight(!night); return;
+    case 'journal': journal.toggle(); return;
     case 'reset':
       car.reset(city.spawn);
+      rules.reset({ parked: city.spawn.parked });
+      journal.clear();
+      droveOff = false;
       hud.message('Машина возвращена на старт', 'info');
       return;
     default: car.action(a, controls, time);
@@ -132,7 +142,10 @@ function handleEvent(e) {
     case 'hazard': hud.message(e.on ? 'Аварийка включена' : 'Аварийка выключена'); break;
     case 'lights': hud.message(['Фары выключены', 'Ближний свет', 'Дальний свет'][e.mode]); break;
     case 'tick': audio.tick(e.on); break;
-    case 'collision': audio.thud(e.speed); hud.message('Удар о бордюр!', 'bad'); break;
+    case 'collision':
+      audio.thud(e.speed);
+      if (e.kind === 'curb') rules.report('CURB', time);
+      break;
     case 'overrev': hud.message('Перекрутка двигателя! Передача слишком низкая для этой скорости', 'bad'); break;
     default: break;
   }
@@ -150,6 +163,8 @@ function updateHint() {
     hud.setHint('Держи Shift (сцепление) и включи 1-ю передачу — E');
   } else if (!droveOff && p.gearbox.gear >= 1 && p.handbrake) {
     hud.setHint('Опусти ручник — Space');
+  } else if (!droveOff && p.gearbox.gear >= 1 && rules.parked && car.signals.turn !== 'left') {
+    hud.setHint('Отъезжаешь от края: включи левый поворотник (Z) и посмотри в левое зеркало (←)');
   } else if (!droveOff && p.gearbox.gear >= 1) {
     hud.setHint('Держи W (газ) и отпусти Shift. Мягче — придерживай Shift в жёлтой зоне шкалы «С»');
   } else if (p.gearbox.gear > 0 && p.gearbox.gear < 5 && p.rpm > 5200) {
@@ -186,10 +201,22 @@ function tick(dt) {
   const controls = input.update(dt, car.physics.v);
   for (const a of input.takeActions()) handleAction(a, controls);
   car.update(dt, controls, city.colliders, time, input);
+  city.update(time);
   for (const e of car.physics.events.splice(0)) handleEvent(e);
   for (const e of car.events.splice(0)) handleEvent(e);
-  updateHint();
   const p = car.physics;
+  rules.update(dt, {
+    x: p.centerX, z: p.centerZ, heading: p.heading, speedKmh: p.speedKmh, time,
+    turn: car.signals.hazard ? null : car.signals.turn, checks: car.view.checks,
+  });
+  for (const e of rules.takeEvents()) {
+    if (e.type !== 'violation') continue;
+    const v = e.violation;
+    journal.add(v);
+    hud.message(`${v.ru}${v.detail ? ` — ${v.detail}` : ''}`, 'bad', 4.5);
+  }
+  journal.setLimit(rules.limit);
+  updateHint();
   hud.update(dt, {
     speedKmh: p.speedKmh, rpm: p.rpm, gear: p.gearbox.label,
     clutch: controls.clutch, brake: controls.brake, throttle: controls.throttle,
@@ -224,11 +251,15 @@ requestAnimationFrame(frame);
 // Для отладки из консоли браузера
 // sim.advance(сек) — прогнать игру вперёд с шагом 1/60 с (для автопроверок)
 window.sim = {
-  car, city, input, hud, scene, renderer, setNight,
+  car, city, input, hud, scene, renderer, setNight, rules, journal,
   get time() { return time; },
   freeze(on = true) { frozen = on; },
   advance(seconds, step = 1 / 60) {
     for (let t = 0; t < seconds; t += step) tick(step);
     render();
   },
+  autopilot(laneIds, opts) { return createAutopilot(window.sim, laneIds, opts); },
+  route: routeHelpers(city.net),
+  key(code, down = true) { window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code })); },
+  tap(code) { this.key(code, true); this.key(code, false); },
 };

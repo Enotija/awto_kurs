@@ -85,14 +85,14 @@ export class DriverView {
     this.camera.position.copy(this.eye).add(this.offset);
     this.camera.rotation.set(BASE_PITCH + this.pitch + this.bob, Math.PI + this.yaw, 0);
 
-    // Засчитываем взгляд, если задержался на цели хотя бы 0.2 с
+    // Засчитываем взгляд, если задержался на цели хотя бы 0.12 с
     this.looking = null;
     for (const [name, t] of Object.entries(T)) {
       const d = Math.hypot(this.yaw - t.yaw, (this.pitch - t.pitch) * 0.7);
       if (d < t.tol) {
         this.dwell[name] += dt;
         this.looking = name;
-        if (this.dwell[name] >= 0.2) this.checks[name] = time;
+        if (this.dwell[name] >= 0.12) this.checks[name] = time;
       } else {
         this.dwell[name] = 0;
       }

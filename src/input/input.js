@@ -18,6 +18,7 @@ const ACTIONS = {
   KeyK: 'start',
   KeyM: 'mute',
   KeyN: 'night',
+  KeyJ: 'journal',
   Backspace: 'reset',
 };
 

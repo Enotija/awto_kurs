@@ -97,3 +97,32 @@ kbd {
   #panel { transform: scale(0.8); transform-origin: bottom right; }
   .keys { grid-template-columns: 1fr; }
 }
+
+/* Журнал нарушений */
+#journal {
+  position: absolute; top: 12px; right: 16px; width: min(360px, calc(100vw - 32px));
+  background: rgba(12, 16, 22, 0.72); border-radius: 10px; padding: 8px 10px; font-size: 13px;
+}
+#journal .jhead { display: flex; justify-content: space-between; align-items: center; opacity: 0.9; }
+#journal.empty #jlist { display: none; }
+#jlist { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; max-height: 60vh; overflow: hidden; }
+.jitem { display: flex; gap: 8px; border-left: 3px solid #ffb13b; padding-left: 6px; }
+.jitem.critical { border-left-color: #ff4b4b; }
+.jitem .jt { opacity: 0.6; font-variant-numeric: tabular-nums; }
+.jitem i { display: block; font-size: 11px; opacity: 0.6; font-style: normal; }
+
+/* Текущее ограничение скорости — как знак B-33 */
+#limit {
+  width: 46px; height: 46px; border-radius: 50%; background: #fff; border: 6px solid #d4161c;
+  display: flex; align-items: center; justify-content: center; align-self: center;
+  color: #111; font-weight: 800; font-size: 17px;
+}
+
+@media (max-width: 640px) {
+  #journal { top: auto; bottom: 110px; font-size: 12px; }
+}
+
+@media (max-width: 1000px) {
+  #hint { bottom: 132px; }
+  #look { bottom: 176px; }
+}
