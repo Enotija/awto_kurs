@@ -7,8 +7,11 @@ import { OPPOSITE, RIGHT_ARM } from '../world/roadNetwork.js';
 
 const isMain = (c) => c.type === 'priority' || c.type === 'none' || c.type === 'signals';
 
+// Траектории пересекаются? Если связка кого-то неизвестна (игрок ещё не выбрал
+// направление) — считаем, что пересекаются.
 export function pathsCross(node, a, b) {
   if (a.arm === b.arm) return false;
+  if (a.conn == null || b.conn == null) return true;
   return node.conflicts[a.conn]?.has(b.conn) ?? false;
 }
 
@@ -17,8 +20,8 @@ export function mustYield(node, a, b, net) {
   if (node.kind === 'roundabout') return !!b.onRing && !a.onRing;
   if (!pathsCross(node, a, b)) return false;
 
-  const movA = net.laneById[a.conn].movement;
-  const movB = net.laneById[b.conn].movement;
+  const movA = a.conn == null ? 'straight' : net.laneById[a.conn].movement;
+  const movB = b.conn == null ? 'straight' : net.laneById[b.conn].movement;
   const ca = node.control[a.arm], cb = node.control[b.arm];
 
   if (node.kind === 'signals') {

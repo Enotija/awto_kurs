@@ -19,6 +19,9 @@ export class RulesEngine {
   constructor(net, lights) {
     this.net = net;
     this.lights = lights;
+    // Дополнительные проверки (например, приоритет относительно других машин) —
+    // получают onEnter / onExit при въезде на перекрёсток и выезде с него
+    this.hooks = [];
     this.reset();
   }
 
@@ -131,6 +134,7 @@ export class RulesEngine {
     }
     if (c.type === 'stop' && !e.stopped) this.report('STOP_SIGN', s.time);
     this.entry = e;
+    for (const h of this.hooks) h.onEnter?.(node, lane, s, e);
     this.events.push({ type: 'nodeEnter', node, arm: lane.arm, control: c, time: s.time });
   }
 
@@ -143,6 +147,7 @@ export class RulesEngine {
     const connector = this.net.laneById[node.connectors[`${e.arm}>${armOut}`]];
     const exitIndex = connector?.exitIndex;
     this.events.push({ type: 'nodeExit', node, armIn: e.arm, armOut, movement: e.arm === armOut ? 'uturn' : movement, exitIndex, time: s.time });
+    for (const h of this.hooks) h.onExit?.(node, outLane, e, s);
 
     if (e.pendingArrow) {
       if (movement !== 'right') this.report('RED_LIGHT', e.time);

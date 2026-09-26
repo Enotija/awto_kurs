@@ -154,7 +154,7 @@ export class PlayerCar {
         const res = c.type === 'box' ? obbVsBox(cx, cz, fx, fz, rx, rz, hw, hl, c)
           : c.type === 'poly' ? obbVsPoly(cx, cz, fx, fz, rx, rz, hw, hl, c)
             : obbVsCircle(cx, cz, fx, fz, rx, rz, hw, hl, c);
-        if (res && (!hit || res.depth > hit.depth)) hit = { ...res, kind: c.kind };
+        if (res && (!hit || res.depth > hit.depth)) hit = { ...res, kind: c.kind, ref: c.ref };
       }
       if (!hit) break;
       p.translate(hit.nx * (hit.depth + 0.001), hit.nz * (hit.depth + 0.001));
@@ -163,7 +163,7 @@ export class PlayerCar {
       if (vn < 0) {
         this.lastCollisionAt = this.time;
         if (Math.abs(p.v) > 0.5 && this.collisionCooldown <= 0) {
-          this.events.push({ type: 'collision', kind: hit.kind, speed: Math.abs(p.v) });
+          this.events.push({ type: 'collision', kind: hit.kind, speed: Math.abs(p.v), ref: hit.ref });
           this.collisionCooldown = 1.0;
         }
         p.v = 0;

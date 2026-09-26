@@ -40,8 +40,21 @@ export function createAutopilot(sim, laneIds, opts = {}) {
       const delta = Math.atan(2 * p.p.wheelbase * Math.sin(alpha) / Math.hypot(dx, dz));
       const st = Math.max(-1, Math.min(1, delta / p.p.maxWheelAngle));
       pad.steer = Math.sign(st) * Math.sqrt(Math.abs(st));
-      const vT = typeof ap.kmh === 'function' ? ap.kmh(ap) : ap.kmh;
+      let vT = typeof ap.kmh === 'function' ? ap.kmh(ap) : ap.kmh;
       const v = p.speedKmh;
+      // Держать дистанцию до машины, велосипеда или пешехода впереди
+      if (sim.traffic) {
+        const rx = -fz, rz = fx;
+        let gap = Infinity;
+        const crossing = sim.traffic.peds.filter((q) => q.state === 'cross');
+        for (const o of [...sim.traffic.vehicles, ...crossing]) {
+          const dx = o.x - p.centerX, dz = o.z - p.centerZ;
+          const lon = dx * fx + dz * fz, lat = Math.abs(dx * rx + dz * rz);
+          if (lon > 0 && lon < 35 && lat < 1.9) gap = Math.min(gap, lon - 2 - (o.hl ?? 0.3));
+        }
+        if (gap < Infinity) vT = Math.min(vT, Math.max(0, (gap - 2.5) * 0.9) * 3.6);
+      }
+      if (p.handbrake && p.engine.running) p.handbrake = false;
       if (!p.engine.running) {
         pad.clutch = 1; pad.throttle = 0;
         if (p.engine.cranking <= 0) p.startEngine(1);
@@ -83,8 +96,9 @@ export function createAutopilot(sim, laneIds, opts = {}) {
       for (let t = 0; t < seconds && !ap.done; t += 1 / 60) {
         ap.step(1 / 60);
         onStep?.(t);
-        sim.advance(1 / 60);
+        sim.advance(1 / 60, 1 / 60, false);
       }
+      sim.advance(0);
     },
   };
   return ap;

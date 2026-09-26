@@ -8,6 +8,9 @@ import { CarAudio } from './audio/carAudio.js';
 import { RulesEngine } from './rules/rules.js';
 import { Journal } from './ui/journal.js';
 import { createAutopilot, routeHelpers } from './debug/autopilot.js';
+import { Traffic } from './traffic/traffic.js';
+import { TrafficView } from './traffic/trafficView.js';
+import { TrafficRules } from './rules/trafficRules.js';
 
 // ---------- Рендер и сцена ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -45,6 +48,9 @@ const journal = new Journal();
 const audio = new CarAudio();
 const rules = new RulesEngine(city.net, city.signals);
 rules.reset({ parked: city.spawn.parked });
+const traffic = new Traffic(city.net, city.signals, { avoid: { x: city.spawn.x, z: city.spawn.z, r: 50 } });
+const trafficView = new TrafficView(scene);
+const trafficRules = new TrafficRules(city.net, traffic, rules);
 
 let paused = true;
 let started = false;
@@ -87,6 +93,7 @@ function setNight(on) {
   sun.intensity = p.sun;
   sun.color.setHex(p.sunColor);
   city.setNight(on);
+  trafficView.setNight(on);
   hud.message(on ? 'Ночь. Включи фары — L' : 'День', 'info');
 }
 
@@ -103,6 +110,7 @@ function handleAction(a, controls) {
     case 'reset':
       car.reset(city.spawn);
       rules.reset({ parked: city.spawn.parked });
+      trafficRules.reset();
       journal.clear();
       droveOff = false;
       hud.message('Машина возвращена на старт', 'info');
@@ -145,6 +153,8 @@ function handleEvent(e) {
     case 'collision':
       audio.thud(e.speed);
       if (e.kind === 'curb') rules.report('CURB', time);
+      else if (e.kind === 'vehicle') { rules.report('COLLISION', time, 'с автомобилем'); traffic.onHit(e.ref); }
+      else if (e.kind === 'person') rules.report('COLLISION', time, 'с пешеходом или велосипедистом');
       break;
     case 'overrev': hud.message('Перекрутка двигателя! Передача слишком низкая для этой скорости', 'bad'); break;
     default: break;
@@ -200,7 +210,14 @@ function tick(dt) {
   time += dt;
   const controls = input.update(dt, car.physics.v);
   for (const a of input.takeActions()) handleAction(a, controls);
-  car.update(dt, controls, city.colliders, time, input);
+  const p0 = car.physics;
+  const pl = {
+    x: p0.centerX, z: p0.centerZ, heading: p0.heading, v: Math.abs(p0.v), hl: p0.p.length / 2, hw: p0.p.width / 2,
+    turn: car.signals.hazard ? null : car.signals.turn, loc: rules.loc, entryArm: rules.entry?.arm,
+  };
+  traffic.update(dt, time, pl);
+  const colliders = city.colliders.concat(traffic.obstaclesNear(pl.x, pl.z));
+  car.update(dt, controls, colliders, time, input);
   city.update(time);
   for (const e of car.physics.events.splice(0)) handleEvent(e);
   for (const e of car.events.splice(0)) handleEvent(e);
@@ -209,6 +226,8 @@ function tick(dt) {
     x: p.centerX, z: p.centerZ, heading: p.heading, speedKmh: p.speedKmh, time,
     turn: car.signals.hazard ? null : car.signals.turn, checks: car.view.checks,
   });
+  trafficRules.update(dt, pl, time);
+  trafficView.update(traffic, time);
   for (const e of rules.takeEvents()) {
     if (e.type !== 'violation') continue;
     const v = e.violation;
@@ -251,12 +270,12 @@ requestAnimationFrame(frame);
 // Для отладки из консоли браузера
 // sim.advance(сек) — прогнать игру вперёд с шагом 1/60 с (для автопроверок)
 window.sim = {
-  car, city, input, hud, scene, renderer, setNight, rules, journal,
+  car, city, input, hud, scene, renderer, setNight, rules, journal, traffic,
   get time() { return time; },
   freeze(on = true) { frozen = on; },
-  advance(seconds, step = 1 / 60) {
+  advance(seconds, step = 1 / 60, draw = true) {
     for (let t = 0; t < seconds; t += step) tick(step);
-    render();
+    if (draw) render();
   },
   autopilot(laneIds, opts) { return createAutopilot(window.sim, laneIds, opts); },
   route: routeHelpers(city.net),

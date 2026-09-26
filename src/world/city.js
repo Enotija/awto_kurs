@@ -79,7 +79,7 @@ export class City {
     this.buildTrees();
     this.buildLamps();
 
-    const extraSigns = [{ code: 'D-42', x: -64.3, z: -138, facing: Math.PI }];
+    const extraSigns = [{ code: 'D-42', x: -64.3, z: -138, facing: Math.PI }, ...this.buildBikePaths()];
     this.group.add(buildSignMeshes([...this.net.signs, ...extraSigns], CURB_H));
     this.lightsView = new TrafficLightsView(this.net, CURB_H);
     this.group.add(this.lightsView.group);
@@ -467,6 +467,34 @@ export class City {
     });
     triMesh.receiveShadow = true;
     this.group.add(triMesh);
+  }
+
+  // Велодорожка: красная лента по траве между тротуаром и домами + знаки C-13
+  buildBikePaths() {
+    const signs = [];
+    for (const bp of this.net.bikePaths) {
+      const pos = [], idx = [];
+      const hw = bp.width / 2;
+      bp.pts.forEach(([x, z], i) => {
+        const a = bp.pts[Math.max(0, i - 1)], b = bp.pts[Math.min(bp.pts.length - 1, i + 1)];
+        const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1;
+        const rx = -dz / l, rz = dx / l;
+        pos.push(x + rx * hw, CURB_H + 0.01, z + rz * hw, x - rx * hw, CURB_H + 0.01, z - rz * hw);
+        if (i > 0) { const k = i * 2; idx.push(k - 2, k - 1, k, k - 1, k + 1, k); }
+      });
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0xa4493d, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
+      mesh.receiveShadow = true;
+      this.group.add(mesh);
+      for (const s of [20, bp.len / 2 + 20]) {
+        const p = pointAt(bp, s);
+        signs.push({ code: 'C-13', x: p.x + p.dz * 1.3, z: p.z - p.dx * 1.3, facing: Math.atan2(-p.dx, -p.dz) });
+      }
+    }
+    return signs;
   }
 
   setNight(night) {

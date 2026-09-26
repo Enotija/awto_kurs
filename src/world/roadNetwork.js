@@ -61,7 +61,7 @@ export function curbOffset(cornerR, d) {
 export function buildNetwork() {
   const net = {
     nodes: [], nodeById: {}, edges: [], lanes: [], laneById: {},
-    blocks: [], crosswalks: [], signs: [], lights: [],
+    blocks: [], crosswalks: [], signs: [], lights: [], bikePaths: [],
   };
 
   // ---------- Узлы ----------
@@ -174,7 +174,7 @@ export function buildNetwork() {
         const lane = addLane({
           kind: 'turn', pts: conn.pts, node: node.id, arm: inL.arm, outArm: outL.depArm,
           movement: conn.movement, exitIndex: conn.exitIndex, speed: inL.speed,
-          prev: inL.id, nextRoad: outL.id,
+          prev: inL.id, nextRoad: outL.id, phiIn: conn.phiIn, phiOut: conn.phiOut,
         });
         lane.next = [outL.id];
         inL.next.push(lane.id);
@@ -236,6 +236,16 @@ export function buildNetwork() {
         if (pathsConflict(a, b)) node.conflicts[a.id].add(b.id);
       }
     }
+  }
+
+  // Велодорожка вокруг квартала у старта (между тротуаром и домами)
+  {
+    const b = net.blocks[0];
+    const off = SIDEWALK + 1.1;
+    const rr = {};
+    for (const k of Object.keys(b.r)) rr[k] = Math.max(1.5, b.r[k] - off + 3);
+    const loop = roundedRectPoly(b.x0 + off, b.z0 + off, b.x1 - off, b.z1 - off, rr);
+    net.bikePaths.push({ ...makePath([...loop, loop[0]]), width: 1.6 });
   }
 
   buildSigns(net);
@@ -334,7 +344,7 @@ function rondoConnector(node, armIn, armOut) {
     if (along > 1e-6 && along <= sweep + 1e-6) exitIndex++;
   }
   const movement = armIn === armOut ? 'uturn' : classify(hin, hout);
-  return { pts, movement, exitIndex, ringSweep: sweep };
+  return { pts, movement, exitIndex, ringSweep: sweep, phiIn, phiOut };
 }
 
 export function roundedRectPoly(x0, z0, x1, z1, r) {

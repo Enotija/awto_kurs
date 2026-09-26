@@ -58,10 +58,13 @@ export function drive(engine, path, opts = {}) {
     if (look) checks[look] = t;
     const p = pointAt(path, Math.min(s, path.len));
     const lat = opts.lateral?.(s, t) ?? 0;
-    engine.update(dt, {
+    const state = {
       x: p.x + -p.dz * lat, z: p.z + p.dx * lat, heading: Math.atan2(p.dx, p.dz),
       speedKmh: v * 3.6, time: t, turn: opts.turn?.(s, t) ?? null, checks,
-    });
+    };
+    opts.before?.(state, dt);
+    engine.update(dt, state);
+    opts.after?.(state, dt);
   }
   return t;
 }
