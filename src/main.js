@@ -11,6 +11,9 @@ import { createAutopilot, routeHelpers } from './debug/autopilot.js';
 import { Traffic } from './traffic/traffic.js';
 import { TrafficView } from './traffic/trafficView.js';
 import { TrafficRules } from './rules/trafficRules.js';
+import { buildYard } from './exam/yardView.js';
+import { yardColliders, heightAt } from './exam/yardLayout.js';
+import { ExamController } from './exam/exam.js';
 
 // ---------- Рендер и сцена ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -40,7 +43,11 @@ const SUN_DIR = new THREE.Vector3(-0.38, 0.78, -0.5).normalize();
 
 // ---------- Мир, машина, ввод ----------
 const city = new City(scene);
+buildYard(scene);
+const staticColliders = city.colliders.concat(yardColliders());
+const SPAWN_LANE = city.net.edges.find((e) => e.key === '1,0|1,1').lanes['1,0>1,1'];
 const car = new PlayerCar(scene);
+car.heightAt = heightAt;
 car.reset(city.spawn);
 const input = new Input(window);
 const hud = new Hud();
@@ -53,36 +60,115 @@ const trafficView = new TrafficView(scene);
 const trafficRules = new TrafficRules(city.net, traffic, rules);
 
 let paused = true;
-let started = false;
+let mode = null;          // 'free' | 'exam' | 'yard' — выбирается в меню
+let lastMode = 'free';
+let exam = null;          // контроллер экзамена/тренировки площадки
+let showingResult = false;
 let night = false;
+let voice = false;        // голос экзаменатора (польский, если есть в системе)
 let time = 0;
-let droveOff = false; // уже трогался — убираем подсказки по троганию
+let droveOff = false;     // уже трогался — убираем подсказки по троганию
+let stalledNow = false;
+let examPanelKey = '';
 
 function resume() {
-  started = true;
+  if (!mode) return;
   paused = false;
-  hud.setOverlay(false, true);
+  showingResult = false;
+  hud.hideOverlay();
   audio.init();
   audio.setMuted(audio.muted);
 }
 function pause() {
   paused = true;
-  hud.setOverlay(true, started);
+  hud.showMenu(!!mode && !showingResult);
   audio.suspend();
 }
 
-// Пауза/подсказка обрабатываются прямо в обработчике клавиш —
-// браузер разрешает звук только внутри действия пользователя.
+const MODE_NAMES = { free: 'свободная езда', exam: 'экзамен WORD', yard: 'площадка — тренировка' };
+
+function startMode(m) {
+  mode = m;
+  lastMode = m;
+  exam = null;
+  examPanelKey = '';
+  journal.clear();
+  trafficRules.reset();
+  droveOff = false;
+  hud.setMode(MODE_NAMES[m]);
+  hud.setExam(null);
+  if (m === 'free') {
+    car.reset(city.spawn, { engine: 'off' });
+    rules.reset({ parked: city.spawn.parked });
+  } else {
+    exam = new ExamController({ net: city.net, mode: m, cityStart: city.spawn, cityStartLane: SPAWN_LANE });
+    rules.reset({ parked: false });
+    exam.begin();
+    processExam();
+  }
+  resume();
+}
+
+// Выбор в меню и на экране итога — внутри клика, поэтому звук разрешён
+hud.onAction = (a) => {
+  if (a.mode) startMode(a.mode);
+  else if (a.act === 'resume') resume();
+  else if (a.act === 'again') startMode(lastMode);
+  else if (a.act === 'menu') { showingResult = false; mode = null; hud.setExam(null); hud.showMenu(false); }
+};
+
+// Пауза обрабатывается прямо в обработчике клавиш — браузер разрешает звук только внутри действия пользователя.
 window.addEventListener('keydown', (e) => {
   if (e.code === 'F1' || e.code === 'Escape') {
     e.preventDefault();
-    if (paused) resume(); else pause();
-  } else if ((e.code === 'Enter' || e.code === 'NumpadEnter') && paused) {
-    resume();
+    if (showingResult) return;
+    if (paused) { if (mode) resume(); } else pause();
+  } else if ((e.code === 'Enter' || e.code === 'NumpadEnter') && paused && !showingResult) {
+    if (mode) resume(); else startMode('free');
   }
 });
-hud.el.overlay.addEventListener('click', () => { if (paused) resume(); });
 window.addEventListener('blur', () => { if (!paused) pause(); });
+hud.showMenu(false);
+
+// ---------- Экзамен ----------
+function speak(text) {
+  if (!voice || !window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'pl-PL';
+  const v = speechSynthesis.getVoices().find((x) => x.lang?.toLowerCase().startsWith('pl'));
+  if (v) u.voice = v;
+  u.rate = 0.95;
+  speechSynthesis.speak(u);
+}
+
+function processExam() {
+  if (!exam) return;
+  for (const c of exam.takeCommands()) {
+    switch (c.type) {
+      case 'teleport':
+        car.reset(c.pose, { engine: c.engine });
+        rules.reset({ parked: c.parked });
+        trafficRules.reset();
+        break;
+      case 'say': speak(c.pl); break;
+      case 'message': hud.message(c.text, c.kind, 5); break;
+      case 'report': rules.report(c.code, time); break;
+      case 'result':
+        showingResult = true;
+        paused = true;
+        audio.suspend();
+        hud.showResult(c);
+        break;
+      default: break;
+    }
+  }
+  const key = JSON.stringify([exam.status, exam.instruction]);
+  if (key !== examPanelKey) {
+    examPanelKey = key;
+    hud.setExam(exam.phase === 'done' ? null : exam.status, exam.instruction);
+  }
+}
 
 function setNight(on) {
   night = on;
@@ -105,9 +191,23 @@ function handleAction(a, controls) {
       audio.setMuted(!audio.muted);
       hud.message(audio.muted ? 'Звук выключен' : 'Звук включён');
       return;
+    case 'voice': {
+      voice = !voice;
+      const hasPl = window.speechSynthesis?.getVoices().some((x) => x.lang?.toLowerCase().startsWith('pl'));
+      hud.message(voice ? `Голос экзаменатора включён${hasPl ? '' : ' (польского голоса в системе нет — будет голос по умолчанию)'}` : 'Голос экзаменатора выключен');
+      if (voice && exam?.instruction) speak(exam.instruction.pl);
+      return;
+    }
     case 'night': setNight(!night); return;
     case 'journal': journal.toggle(); return;
     case 'reset':
+      if (mode === 'exam') { hud.message('Во время экзамена вернуться на старт нельзя', 'warn'); return; }
+      if (mode === 'yard' && exam?.phase === 'yard') {
+        exam.startTask();
+        processExam();
+        hud.message('Задание начато заново', 'info');
+        return;
+      }
       car.reset(city.spawn);
       rules.reset({ parked: city.spawn.parked });
       trafficRules.reset();
@@ -139,7 +239,7 @@ const GRIND = {
 
 function handleEvent(e) {
   switch (e.type) {
-    case 'stall': audio.clunk(); hud.message(stallText(e), 'bad', 5); break;
+    case 'stall': stalledNow = true; audio.clunk(); hud.message(stallText(e), 'bad', 5); break;
     case 'started': hud.message('Двигатель заведён', 'good'); break;
     case 'startFailed': hud.message('Не завелось — попробуй ещё раз (K)', 'warn'); break;
     case 'startDenied':
@@ -216,7 +316,7 @@ function tick(dt) {
     turn: car.signals.hazard ? null : car.signals.turn, loc: rules.loc, entryArm: rules.entry?.arm,
   };
   traffic.update(dt, time, pl);
-  const colliders = city.colliders.concat(traffic.obstaclesNear(pl.x, pl.z));
+  const colliders = staticColliders.concat(traffic.obstaclesNear(pl.x, pl.z));
   car.update(dt, controls, colliders, time, input);
   city.update(time);
   for (const e of car.physics.events.splice(0)) handleEvent(e);
@@ -229,11 +329,24 @@ function tick(dt) {
   trafficRules.update(dt, pl, time);
   trafficView.update(traffic, time);
   for (const e of rules.takeEvents()) {
-    if (e.type !== 'violation') continue;
-    const v = e.violation;
-    journal.add(v);
-    hud.message(`${v.ru}${v.detail ? ` — ${v.detail}` : ''}`, 'bad', 4.5);
+    if (e.type === 'violation') {
+      const v = e.violation;
+      journal.add(v);
+      hud.message(`${v.ru}${v.detail ? ` — ${v.detail}` : ''}`, 'bad', 4.5);
+    }
+    exam?.onRulesEvent(e);
   }
+  if (exam) {
+    exam.update(dt, {
+      x: p.centerX, z: p.centerZ, heading: p.heading, v: p.v, handbrake: p.handbrake,
+      running: p.engine.running, stalled: stalledNow, time,
+      collided: car.lastCollisionAt >= time - dt - 1e-6 ? car.lastCollisionKind : null,
+      lowBeam: car.signals.headlights >= 1,
+      laneId: rules.loc?.type === 'lane' ? rules.loc.lane.id : null,
+    });
+    processExam();
+  }
+  stalledNow = false;
   journal.setLimit(rules.limit);
   updateHint();
   hud.update(dt, {
@@ -270,7 +383,9 @@ requestAnimationFrame(frame);
 // Для отладки из консоли браузера
 // sim.advance(сек) — прогнать игру вперёд с шагом 1/60 с (для автопроверок)
 window.sim = {
-  car, city, input, hud, scene, renderer, setNight, rules, journal, traffic,
+  car, city, input, hud, scene, renderer, setNight, rules, journal, traffic, startMode,
+  get exam() { return exam; },
+  get paused() { return paused; },
   get time() { return time; },
   freeze(on = true) { frozen = on; },
   advance(seconds, step = 1 / 60, draw = true) {

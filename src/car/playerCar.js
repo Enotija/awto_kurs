@@ -19,6 +19,9 @@ export class PlayerCar {
     this.collisionCooldown = 0;
     this.time = 0;
     this.lastCollisionAt = -Infinity;
+    this.lastCollisionKind = null;
+    this.heightAt = null; // рельеф (горка на площадке); null — всё ровное
+    this.pitch = 0;
 
     this.group = new THREE.Group();
     this.group.name = 'playerCar';
@@ -53,16 +56,21 @@ export class PlayerCar {
     }
   }
 
-  reset({ x, z, heading }) {
+  // engine: 'off' — заглушить; 'keep' — оставить как есть (при переносе между заданиями экзамена)
+  reset({ x, z, heading }, { engine = 'off' } = {}) {
     const p = this.physics;
     p.setPose(x, z, heading);
     p.v = 0;
-    p.engine.stop();
-    p.engine.omega = 0;
+    if (engine === 'off') {
+      p.engine.stop();
+      p.engine.omega = 0;
+    }
     p.gearbox.gear = 0;
     p.handbrake = true;
     this.signals.turn = null;
     this.signals.hazard = false;
+    this.lastCollisionAt = -Infinity;
+    this.lastCollisionKind = null;
     this.syncTransform();
   }
 
@@ -108,6 +116,8 @@ export class PlayerCar {
   update(dt, controls, colliders, time, input) {
     const p = this.physics;
     this.time = time;
+    // Уклон дороги по высотам задней и передней оси — для физики (скатывание на горке)
+    p.grade = this.axleHeights().grade;
     this.acc += dt;
     while (this.acc >= PHYS_DT) {
       p.step(PHYS_DT, controls);
@@ -134,10 +144,22 @@ export class PlayerCar {
     }, p.p.steeringWheelTurns);
   }
 
+  axleHeights() {
+    const p = this.physics;
+    if (!this.heightAt) return { rear: 0, front: 0, grade: 0 };
+    const fx = Math.sin(p.heading), fz = Math.cos(p.heading), L = p.p.wheelbase;
+    const rear = this.heightAt(p.x, p.z);
+    const front = this.heightAt(p.x + fx * L, p.z + fz * L);
+    return { rear, front, grade: (front - rear) / L };
+  }
+
   syncTransform() {
     const p = this.physics;
-    this.group.position.set(p.centerX, 0, p.centerZ);
-    this.group.rotation.set(0, p.heading, 0);
+    const h = this.axleHeights();
+    this.pitch = Math.atan(h.grade);
+    this.group.position.set(p.centerX, (h.rear + h.front) / 2, p.centerZ);
+    // Сначала курс, потом наклон вперёд-назад (нос вверх — отрицательный поворот вокруг X)
+    this.group.rotation.set(-this.pitch, p.heading, 0, 'YXZ');
     this.group.updateMatrixWorld();
   }
 
@@ -162,6 +184,7 @@ export class PlayerCar {
       const vn = (fx * hit.nx + fz * hit.nz) * p.v;
       if (vn < 0) {
         this.lastCollisionAt = this.time;
+        this.lastCollisionKind = hit.kind;
         if (Math.abs(p.v) > 0.5 && this.collisionCooldown <= 0) {
           this.events.push({ type: 'collision', kind: hit.kind, speed: Math.abs(p.v), ref: hit.ref });
           this.collisionCooldown = 1.0;

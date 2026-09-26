@@ -11,6 +11,7 @@ export const VIOLATIONS = {
   NO_MIRROR: { severity: 'minor', ru: 'Манёвр без взгляда в зеркало', pl: 'Brak obserwacji w lusterkach przed manewrem' },
   WRONG_SIDE: { severity: 'critical', ru: 'Езда по встречной полосе', pl: 'Jazda lewą stroną jezdni' },
   CURB: { severity: 'minor', ru: 'Наезд на бордюр', pl: 'Najechanie na krawężnik' },
+  NO_LIGHTS: { severity: 'minor', ru: 'Движение без ближнего света', pl: 'Jazda bez włączonych świateł mijania' },
   // Этап 3 — живой город
   PRIORITY: { severity: 'critical', ru: 'Не уступил дорогу (помеха)', pl: 'Wymuszenie pierwszeństwa przejazdu' },
   PEDESTRIAN: { severity: 'critical', ru: 'Не пропустил пешехода на переходе', pl: 'Nieustąpienie pierwszeństwa pieszemu' },

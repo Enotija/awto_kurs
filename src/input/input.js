@@ -19,6 +19,7 @@ const ACTIONS = {
   KeyM: 'mute',
   KeyN: 'night',
   KeyJ: 'journal',
+  KeyV: 'voice',
   Backspace: 'reset',
 };
 

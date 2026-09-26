@@ -126,3 +126,49 @@ kbd {
   #hint { bottom: 132px; }
   #look { bottom: 176px; }
 }
+
+/* Меню */
+.hidden { display: none !important; }
+.modes { display: grid; gap: 10px; margin: 16px 0 6px; }
+button { font: inherit; color: inherit; }
+button.mode {
+  text-align: left; background: #1f2835; border: 1px solid #334155; border-radius: 10px;
+  padding: 12px 14px; cursor: pointer; pointer-events: auto;
+}
+button.mode:hover { background: #26344a; border-color: #4a78c8; }
+button.mode b { display: block; font-size: 17px; }
+button.mode small { display: block; opacity: 0.7; font-size: 13px; margin-top: 3px; }
+button.start { border: 0; width: 100%; color: #fff; }
+button.start.secondary { background: #3a4452; }
+.resumeRow { margin-top: 10px; }
+details#helpBox { margin-top: 12px; }
+details#helpBox summary { cursor: pointer; opacity: 0.85; }
+
+/* Панель экзаменатора */
+#exam {
+  position: absolute; top: 48px; left: 16px; width: min(460px, calc(100vw - 32px));
+  background: rgba(12, 16, 22, 0.82); border-left: 4px solid #f5c542; border-radius: 8px;
+  padding: 10px 12px; font-size: 14px;
+}
+#exam .stage { font-size: 12px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.04em; }
+#exam .title { font-weight: 600; font-size: 15px; }
+#exam .sub { font-size: 12px; opacity: 0.75; }
+#exam .pl { font-style: italic; margin-top: 8px; color: #ffe8a3; }
+#exam .ru { margin-top: 3px; }
+#exam .pl:empty, #exam .ru:empty { display: none; }
+
+/* Итог экзамена */
+#resultCard .verdict { font-size: 44px; font-weight: 800; text-align: center; letter-spacing: 0.05em; }
+#resultCard .verdict.pass { color: #4bd66e; }
+#resultCard .verdict.fail { color: #ff4b4b; }
+#resultCard .verdict.neutral { color: #7fb2ff; font-size: 30px; }
+#resultCard .reason { text-align: center; font-size: 16px; }
+#resultCard i { display: block; font-size: 12px; opacity: 0.6; font-style: normal; }
+#resultCard ul { padding-left: 18px; margin: 6px 0; font-size: 14px; line-height: 1.5; }
+#resultCard li.ok { color: #9be7ae; }
+#resultCard li.bad { color: #ff9b9b; }
+.resultBtns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+@media (max-width: 900px) {
+  #journal { top: auto; bottom: 180px; }
+}
